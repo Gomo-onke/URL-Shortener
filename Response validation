@@ -1,0 +1,29 @@
+Response validation
+"""
+from pydantic import BaseModel, HttpUrl
+from datetime import datetime
+from typing import Optional
+
+class URLCreate(BaseModel):
+    """Schema for creating a new shortened URL"""
+    target_url: str
+    custom_code: Optional[str] = None
+    expires_in_days: Optional[int] = 30
+
+class URLBase(BaseModel):
+    """Base URL schema"""
+    target_url: str
+    short_code: str
+
+class URLResponse(BaseModel):
+    """Schema for URL response"""
+    id: int
+    target_url: str
+    short_code: str
+    short_url: str
+    clicks: int
+    created_at: datetime
+    expires_at: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
