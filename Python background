@@ -1,0 +1,135 @@
+
+import validators
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session
+from typing import Optional
+import shortuuid
+
+from . import models, schemas, crud
+from .database import SessionLocal, engine, get_db
+
+# Create database tables
+models.Base.metadata.create_all(bind=engine)
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="URL Shortener API",
+    description="A cloud-native URL shortening service",
+    version="1.0.0"
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "https://yourdomain.com"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+def read_root():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "url-shortener"}
+
+@app.post("/shorten", response_model=schemas.URLResponse)
+def create_short_url(
+    url_data: schemas.URLCreate,
+    db: Session = Depends(get_db)
+):
+    """Create a shortened URL"""
+    # Validate URL
+    if not validators.url(url_data.target_url):
+        raise HTTPException(status_code=400, detail="Invalid URL provided")
+    
+    # Generate short code
+    short_code = shortuuid.ShortUUID().random(length=6)
+    
+    # Create URL record
+    db_url = crud.create_url(
+        db=db,
+        url_data=url_data,
+        short_code=short_code
+    )
+    
+    # Build short URL
+    base_url = "https://short.ly"  # Replace with your domain
+    short_url = f"{base_url}/{short_code}"
+    
+    return {
+        "id": db_url.id,
+        "target_url": db_url.target_url,
+        "short_code": db_url.short_code,
+        "short_url": short_url,
+        "clicks": db_url.clicks,
+        "created_at": db_url.created_at,
+        "expires_at": db_url.expires_at
+    }
+
+@app.get("/{short_code}")
+def redirect_to_url(short_code: str, db: Session = Depends(get_db)):
+    """Redirect to the original URL"""
+    db_url = crud.get_url_by_short_code(db, short_code=short_code)
+    
+    if not db_url:
+        raise HTTPException(status_code=404, detail="URL not found")
+    
+    # Update click count
+    db_url.clicks += 1
+    db.commit()
+    
+    return RedirectResponse(url=db_url.target_url)
+
+@app.get("/api/url/{short_code}", response_model=schemas.URLResponse)
+def get_url_info(short_code: str, db: Session = Depends(get_db)):
+    """Get information about a shortened URL"""
+    db_url = crud.get_url_by_short_code(db, short_code=short_code)
+    
+    if not db_url:
+        raise HTTPException(status_code=404, detail="URL not found")
+    
+    base_url = "https://short.ly"
+    short_url = f"{base_url}/{short_code}"
+    
+    return {
+        "id": db_url.id,
+        "target_url": db_url.target_url,
+        "short_code": db_url.short_code,
+        "short_url": short_url,
+        "clicks": db_url.clicks,
+        "created_at": db_url.created_at,
+        "expires_at": db_url.expires_at
+    }
+
+@app.get("/api/urls/", response_model=list[schemas.URLResponse])
+def list_urls(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """List all shortened URLs"""
+    urls = crud.get_urls(db, skip=skip, limit=limit)
+    
+    result = []
+    for db_url in urls:
+        base_url = "https://short.ly"
+        short_url = f"{base_url}/{db_url.short_code}"
+        result.append({
+            "id": db_url.id,
+            "target_url": db_url.target_url,
+            "short_code": db_url.short_code,
+            "short_url": short_url,
+            "clicks": db_url.clicks,
+            "created_at": db_url.created_at,
+            "expires_at": db_url.expires_at
+        })
+    
+    return result
+
+@app.delete("/api/url/{short_code}")
+def delete_url(short_code: str, db: Session = Depends(get_db)):
+    """Delete a shortened URL"""
+    db_url = crud.delete_url(db, short_code=short_code)
+    
+    if not db_url:
+        raise HTTPException(status_code=404, detail="URL not found")
+    
+    return {"message": "URL deleted successfully"}
