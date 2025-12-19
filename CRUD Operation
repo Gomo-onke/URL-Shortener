@@ -1,0 +1,69 @@
+"""
+CRUD operations for URL Shortener
+"""
+from sqlalchemy.orm import Session
+from . import models, schemas
+from datetime import datetime, timedelta
+
+def create_url(db: Session, url_data: schemas.URLCreate, short_code: str):
+    """Create a new shortened URL"""
+    # Calculate expiration date
+    expires_at = None
+    if url_data.expires_in_days:
+        expires_at = datetime.utcnow() + timedelta(days=url_data.expires_in_days)
+    
+    # Use custom code if provided
+    if url_data.custom_code:
+        short_code = url_data.custom_code
+    
+    # Check if short code already exists
+    existing_url = get_url_by_short_code(db, short_code)
+    if existing_url:
+        raise ValueError(f"Short code '{short_code}' already exists")
+    
+    # Create URL record
+    db_url = models.URL(
+        target_url=url_data.target_url,
+        short_code=short_code,
+        expires_at=expires_at
+    )
+    
+    db.add(db_url)
+    db.commit()
+    db.refresh(db_url)
+    return db_url
+
+def get_url_by_short_code(db: Session, short_code: str):
+    """Get URL by its short code"""
+    return db.query(models.URL).filter(
+        models.URL.short_code == short_code,
+        models.URL.is_active == True
+    ).first()
+
+def get_urls(db: Session, skip: int = 0, limit: int = 100):
+    """Get all URLs with pagination"""
+    return db.query(models.URL).filter(
+        models.URL.is_active == True
+    ).offset(skip).limit(limit).all()
+
+def delete_url(db: Session, short_code: str):
+    """Soft delete a URL (mark as inactive)"""
+    db_url = get_url_by_short_code(db, short_code)
+    if db_url:
+        db_url.is_active = False
+        db.commit()
+        db.refresh(db_url)
+    return db_url
+
+def cleanup_expired_urls(db: Session):
+    """Clean up expired URLs"""
+    expired_urls = db.query(models.URL).filter(
+        models.URL.expires_at < datetime.utcnow(),
+        models.URL.is_active == True
+    ).all()
+    
+    for url in expired_urls:
+        url.is_active = False
+    
+    db.commit()
+    return len(expired_urls)
