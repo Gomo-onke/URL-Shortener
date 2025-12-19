@@ -1,0 +1,39 @@
+url-shortener/
+├── .github/
+│   └── workflows/
+│       └── deploy.yml
+├── src/
+│   ├── backend/
+│   │   ├── app/
+│   │   │   ├── __init__.py
+│   │   │   ├── main.py
+│   │   │   ├── models.py
+│   │   │   ├── schemas.py
+│   │   │   ├── crud.py
+│   │   │   └── database.py
+│   │   ├── tests/
+│   │   │   └── test_main.py
+│   │   └── requirements.txt
+│   └── frontend/
+│       ├── public/
+│       │   └── index.html
+│       ├── src/
+│       │   ├── App.js
+│       │   ├── index.js
+│       │   └── styles.css
+│       └── package.json
+├── infrastructure/
+│   ├── terraform/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   └── docker/
+│       ├── backend.Dockerfile
+│       └── frontend.Dockerfile
+├── docs/
+│   ├── API.md
+│   └── DEPLOYMENT.md
+├── .gitignore
+├── README.md
+├── LICENSE
+└── docker-compose.yml
